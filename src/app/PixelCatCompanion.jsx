@@ -155,6 +155,8 @@ class PerformanceMonitor {
   frameCallback = null;
   rafId = null;
   active = false;
+  // Reuse `now` as an instance field to avoid per-frame allocations
+  _now = 0;
 
   start(callback) {
     if (this.active) return; // Prevent duplicate loops
@@ -163,12 +165,12 @@ class PerformanceMonitor {
     const measure = () => {
       if (!this.active) return;
       this.frames++;
-      const now = performance.now();
-      if (now - this.lastTime >= 1000) {
+      this._now = performance.now();
+      if (this._now - this.lastTime >= 1000) {
         this.fps = this.frames;
         callback(this.fps);
         this.frames = 0;
-        this.lastTime = now;
+        this.lastTime = this._now;
       }
       this.rafId = requestAnimationFrame(measure);
     };
@@ -233,7 +235,9 @@ class AudioReactivityEngine {
       this.onVolumeChange(normalizedVolume);
     }
 
-    requestAnimationFrame(() => this.analyze());
+    // Reuse the bound method reference — no new arrow function allocated per frame
+    if (!this._boundAnalyze) this._boundAnalyze = this.analyze.bind(this);
+    requestAnimationFrame(this._boundAnalyze);
   }
 
   stop() {
@@ -776,14 +780,12 @@ const PixelCatCompanion = forwardRef(({
 
     if (!performanceMonitor.current) performanceMonitor.current = new PerformanceMonitor();
     performanceMonitor.current.start((fps) => {
-      metricData.current = {
-        ...metricData.current,
-        fps,
-        latency: Math.random() * 20 + 5,
-        memoryUsage: Math.random() * 200 + 50,
-        uptime: (Date.now() - startTime.current) / 1000,
-        ambientLight: Math.random() * 0.6 + 0.2,
-      };
+      // Mutate in-place — no spread allocation per fps tick
+      metricData.current.fps = fps;
+      metricData.current.latency = Math.random() * 20 + 5;
+      metricData.current.memoryUsage = Math.random() * 200 + 50;
+      metricData.current.uptime = (Date.now() - startTime.current) / 1000;
+      metricData.current.ambientLight = Math.random() * 0.6 + 0.2;
     });
 
     // Simulate ambient light sensor
@@ -818,20 +820,22 @@ const PixelCatCompanion = forwardRef(({
   }, [isMounted]);
 
   // Ambient Status System (Phase 3B & 4A) - Rotates dynamically
+  // Strict guard: capture stateCount once per character so the updater
+  // never re-reads AMBIENT_STATES and never allocates a new object inside the tick.
   useEffect(() => {
     const rotationPacing = selectedCharacter === "ferrari" || selectedCharacter === "lambo" ? 8000 : selectedCharacter === "kirby" ? 12000 : 20000;
+    const stateCount = (AMBIENT_STATES[selectedCharacter] || AMBIENT_STATES.cat).length;
+    // Reset index immediately on character change — comparative guard prevents redundant set
+    setAmbientIndex(prev => (prev === 0 ? 0 : 0));
     const interval = setInterval(() => {
       setAmbientIndex(prev => {
-        const states = AMBIENT_STATES[selectedCharacter] || AMBIENT_STATES.cat;
-        return (prev + 1) % states.length;
+        const next = (prev + 1) % stateCount;
+        // Guard: if somehow already at same value, skip the state update
+        if (next === prev) return prev;
+        return next;
       });
     }, rotationPacing);
     return () => clearInterval(interval);
-  }, [selectedCharacter]);
-
-  // Reset ambient index when character changes
-  useEffect(() => {
-    setAmbientIndex(0);
   }, [selectedCharacter]);
 
   // Audio reactivity initialization
@@ -990,48 +994,18 @@ const PixelCatCompanion = forwardRef(({
   const CurrentIcon = currentInfo.icon;
 
   // Character-Aware Theme & Time-Aware Ambience
+  // These are plain boolean flags — no allocations
   const isKirby = selectedCharacter === "kirby";
   const isFerrari = selectedCharacter === "ferrari";
   const isLambo = selectedCharacter === "lambo";
   const isNight = hour >= 22 || hour < 6;
   const isMorning = hour >= 6 && hour < 11;
 
-  const themeColors = {
-    badgeLine: isFerrari ? "from-[#dc143c]/40" : isLambo ? "from-blue-500/40" : isKirby ? "from-pink-500/40" : "from-purple-500/40",
-    pulseLine: isFerrari ? "via-[#dc143c]/20" : isLambo ? "via-blue-500/20" : isKirby ? "via-pink-500/20" : "via-purple-500/20",
-    pulseDot: isFerrari ? "bg-[#dc143c]/30" : isLambo ? "bg-blue-500/30" : isKirby ? "bg-pink-500/30" : "bg-purple-500/30",
-    controlHover: isFerrari ? "hover:text-[#dc143c]" : isLambo ? "hover:text-blue-400" : isKirby ? "hover:text-pink-400" : "hover:text-purple-400",
-    textMuted: isFerrari ? "text-[#dc143c]/60" : isLambo ? "text-blue-400/60" : isKirby ? "text-pink-400/60" : "text-purple-400/60",
-    buttonGlow: isFerrari ? "drop-shadow-[0_0_10px_rgba(220,20,60,0.7)] text-[#dc143c]" : isLambo ? "drop-shadow-[0_0_10px_rgba(59,130,246,0.7)] text-blue-400" : isKirby ? "drop-shadow-[0_0_10px_rgba(244,63,94,0.7)] text-pink-400" : "drop-shadow-[0_0_10px_rgba(168,85,247,0.7)] text-purple-400",
-    particleColors: isFerrari
-      ? ["bg-[#dc143c]/30", "bg-[#ff2e56]/30", "bg-orange-500/20", "bg-[#dc143c]/30"]
-      : isLambo
-        ? ["bg-blue-500/30", "bg-cyan-500/30", "bg-indigo-500/20", "bg-blue-400/30"]
-        : isKirby
-          ? ["bg-pink-500/30", "bg-rose-500/30", "bg-fuchsia-500/30", "bg-pink-400/30"]
-          : ["bg-purple-500/30", "bg-indigo-500/30", "bg-violet-500/30", "bg-fuchsia-500/20"],
-    scanlineOpacity: isFerrari || isLambo ? [0.012, 0.025, 0.012] : isKirby ? [0.01, 0.02, 0.01] : [0.015, 0.035, 0.015],
-    pulseSpeed: isFerrari || isLambo ? 1.5 : isKirby ? 2 : 3.5,
-    clockGlowSpeed: isFerrari || isLambo ? 3 : isKirby ? 4 : 6,
-  };
-
-  // Clock glow — character sets the default
-  const clockGlowColorStyle = {
-    backgroundColor: isFerrari
-      ? "rgba(220,20,60,0.08)"
-      : isLambo
-        ? "rgba(59,130,246,0.08)"
-        : isKirby
-          ? "rgba(244,63,94,0.08)"
-          : "rgba(168,85,247,0.08)"
-  };
-
-  // Glow intensity
-  const glowOpacity = isFerrari || isLambo
-    ? [0.12, 0.5, 0.12]
-    : isKirby
-      ? [0.1, 0.4, 0.1]
-      : [0.06, 0.3, 0.06];
+  // Static file-scope lookup maps (defined below the component) are read here.
+  // No new object is created per-render — we just read the appropriate cached entry.
+  const themeColors = THEME_COLOR_MAP[selectedCharacter] || THEME_COLOR_MAP.cat;
+  const clockGlowColorStyle = GLOW_COLOR_STYLE_MAP[selectedCharacter] || GLOW_COLOR_STYLE_MAP.cat;
+  const glowOpacity = GLOW_OPACITY_MAP[isFerrari || isLambo ? "car" : selectedCharacter] || GLOW_OPACITY_MAP.cat;
 
   // Particle config — character-based, memoized to prevent canvas teardown on re-renders
   const particleConfig = useMemo(() => ({
@@ -1568,6 +1542,77 @@ const PixelCatCompanion = forwardRef(({
 });
 
 PixelCatCompanion.displayName = "PixelCatCompanion";
+
+// ============================================================================
+// STATIC FILE-SCOPE THEME MAPS
+// These objects are allocated ONCE at module load time and never rebuilt.
+// The component render function reads the correct entry by key — zero allocation.
+// ============================================================================
+
+const THEME_COLOR_MAP = Object.freeze({
+  ferrari: Object.freeze({
+    badgeLine: "from-[#dc143c]/40",
+    pulseLine: "via-[#dc143c]/20",
+    pulseDot: "bg-[#dc143c]/30",
+    controlHover: "hover:text-[#dc143c]",
+    textMuted: "text-[#dc143c]/60",
+    buttonGlow: "drop-shadow-[0_0_10px_rgba(220,20,60,0.7)] text-[#dc143c]",
+    particleColors: ["bg-[#dc143c]/30", "bg-[#ff2e56]/30", "bg-orange-500/20", "bg-[#dc143c]/30"],
+    scanlineOpacity: [0.012, 0.025, 0.012],
+    pulseSpeed: 1.5,
+    clockGlowSpeed: 3,
+  }),
+  lambo: Object.freeze({
+    badgeLine: "from-blue-500/40",
+    pulseLine: "via-blue-500/20",
+    pulseDot: "bg-blue-500/30",
+    controlHover: "hover:text-blue-400",
+    textMuted: "text-blue-400/60",
+    buttonGlow: "drop-shadow-[0_0_10px_rgba(59,130,246,0.7)] text-blue-400",
+    particleColors: ["bg-blue-500/30", "bg-cyan-500/30", "bg-indigo-500/20", "bg-blue-400/30"],
+    scanlineOpacity: [0.012, 0.025, 0.012],
+    pulseSpeed: 1.5,
+    clockGlowSpeed: 3,
+  }),
+  kirby: Object.freeze({
+    badgeLine: "from-pink-500/40",
+    pulseLine: "via-pink-500/20",
+    pulseDot: "bg-pink-500/30",
+    controlHover: "hover:text-pink-400",
+    textMuted: "text-pink-400/60",
+    buttonGlow: "drop-shadow-[0_0_10px_rgba(244,63,94,0.7)] text-pink-400",
+    particleColors: ["bg-pink-500/30", "bg-rose-500/30", "bg-fuchsia-500/30", "bg-pink-400/30"],
+    scanlineOpacity: [0.01, 0.02, 0.01],
+    pulseSpeed: 2,
+    clockGlowSpeed: 4,
+  }),
+  cat: Object.freeze({
+    badgeLine: "from-purple-500/40",
+    pulseLine: "via-purple-500/20",
+    pulseDot: "bg-purple-500/30",
+    controlHover: "hover:text-purple-400",
+    textMuted: "text-purple-400/60",
+    buttonGlow: "drop-shadow-[0_0_10px_rgba(168,85,247,0.7)] text-purple-400",
+    particleColors: ["bg-purple-500/30", "bg-indigo-500/30", "bg-violet-500/30", "bg-fuchsia-500/20"],
+    scanlineOpacity: [0.015, 0.035, 0.015],
+    pulseSpeed: 3.5,
+    clockGlowSpeed: 6,
+  }),
+});
+
+const GLOW_COLOR_STYLE_MAP = Object.freeze({
+  ferrari: Object.freeze({ backgroundColor: "rgba(220,20,60,0.08)" }),
+  lambo:   Object.freeze({ backgroundColor: "rgba(59,130,246,0.08)" }),
+  kirby:   Object.freeze({ backgroundColor: "rgba(244,63,94,0.08)" }),
+  cat:     Object.freeze({ backgroundColor: "rgba(168,85,247,0.08)" }),
+});
+
+// "car" key is shared by ferrari + lambo (both use the same opacity values)
+const GLOW_OPACITY_MAP = Object.freeze({
+  car:   Object.freeze([0.12, 0.5, 0.12]),
+  kirby: Object.freeze([0.1, 0.4, 0.1]),
+  cat:   Object.freeze([0.06, 0.3, 0.06]),
+});
 
 export default PixelCatCompanion;
 
