@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import NoSleep from "nosleep.js";
-import { motion, AnimatePresence, useMotionValue } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Moon, Brain, Cat, Activity, Maximize, Minimize,
   Volume2, VolumeX, Settings, Car, ChevronLeft
@@ -462,7 +462,8 @@ const PixelCatCompanion = forwardRef(({
   const [state, setState] = useState("idle");
   const [ambientIndex, setAmbientIndex] = useState(0);
   const [selectedCharacter, setSelectedCharacter] = useState("lambo");
-  const [frameIndex, setFrameIndex] = useState(0);
+  const frameIndexRef = useRef(0);
+  const spriteRef = useRef(null);
   const [formattedTime, setFormattedTime] = useState({ main: "88:88", sub: "88" });
   const [hour, setHour] = useState(12);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -496,8 +497,8 @@ const PixelCatCompanion = forwardRef(({
   // Refs for performance tracking
   const containerRef = useRef(null);
   const startTime = useRef(Date.now());
-  const performanceMonitor = useRef(new PerformanceMonitor());
-  const audioEngine = useRef(new AudioReactivityEngine());
+  const performanceMonitor = useRef(null);
+  const audioEngine = useRef(null);
   const ambientVolume = useRef(0);
   const ambientAudio = useRef(null);
   const noSleepRef = useRef(null);
@@ -526,10 +527,11 @@ const PixelCatCompanion = forwardRef(({
     },
     toggleAudioReactivity: () => {
       if (isMuted) {
-        audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
+        if (!audioEngine.current) audioEngine.current = new AudioReactivityEngine();
+      audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
         setIsMuted(false);
       } else {
-        audioEngine.current.stop();
+        if (audioEngine.current) audioEngine.current.stop();
         setIsMuted(true);
       }
     },
@@ -575,11 +577,16 @@ const PixelCatCompanion = forwardRef(({
   };
 
   // Sprite animation loop (Phase 4C - Advanced Idle Behavior)
+  // Uses direct DOM manipulation via spriteRef to avoid triggering React re-renders
   useEffect(() => {
-    setFrameIndex(0);
+    frameIndexRef.current = 0;
+    if (spriteRef.current) {
+      spriteRef.current.src = currentFrames[0] || '';
+    }
     let timeoutId;
     let currentIdx = 0;
     const maxFrames = currentFrames.length;
+    const frames = [...currentFrames]; // snapshot to avoid stale closure
 
     const advanceFrame = () => {
       const isKirby = selectedCharacter === "kirby";
@@ -607,7 +614,12 @@ const PixelCatCompanion = forwardRef(({
 
       nextFrame = nextFrame % maxFrames;
       currentIdx = nextFrame;
-      setFrameIndex(nextFrame);
+      frameIndexRef.current = nextFrame;
+
+      // Direct DOM update — bypasses React reconciliation entirely
+      if (spriteRef.current) {
+        spriteRef.current.src = frames[nextFrame] || frames[0];
+      }
 
       timeoutId = setTimeout(advanceFrame, delay);
     };
@@ -674,6 +686,7 @@ const PixelCatCompanion = forwardRef(({
   useEffect(() => {
     if (!enablePerformanceMonitoring || !isMounted) return;
 
+    if (!performanceMonitor.current) performanceMonitor.current = new PerformanceMonitor();
     performanceMonitor.current.start((fps) => {
       metricData.current = {
         ...metricData.current,
@@ -694,7 +707,7 @@ const PixelCatCompanion = forwardRef(({
 
     return () => {
       clearInterval(lightInterval);
-      performanceMonitor.current.stop();
+      if (performanceMonitor.current) performanceMonitor.current.stop();
     };
   }, [enablePerformanceMonitoring, isMounted]);
 
@@ -736,10 +749,11 @@ const PixelCatCompanion = forwardRef(({
   // Audio reactivity initialization
   useEffect(() => {
     if (enableAudioReactivity && !isMuted) {
+      if (!audioEngine.current) audioEngine.current = new AudioReactivityEngine();
       audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
     }
     return () => {
-      audioEngine.current.stop();
+      if (audioEngine.current) audioEngine.current.stop();
     };
   }, [enableAudioReactivity, isMuted]);
 
@@ -927,13 +941,19 @@ const PixelCatCompanion = forwardRef(({
       ? [0.1, 0.4, 0.1]
       : [0.06, 0.3, 0.06];
 
-  // Particle config — character-based
-  const particleConfig = {
+  // Particle config — character-based, memoized to prevent canvas teardown on re-renders
+  const particleConfig = useMemo(() => ({
     count: particleDensity === "high" ? 48 : particleDensity === "medium" ? 24 : 12,
-    colors: themeColors.particleColors,
+    colors: isFerrari
+      ? ["bg-[#dc143c]/30", "bg-[#ff2e56]/30", "bg-orange-500/20", "bg-[#dc143c]/30"]
+      : isLambo
+        ? ["bg-blue-500/30", "bg-cyan-500/30", "bg-indigo-500/20", "bg-blue-400/30"]
+        : isKirby
+          ? ["bg-pink-500/30", "bg-rose-500/30", "bg-fuchsia-500/30", "bg-pink-400/30"]
+          : ["bg-purple-500/30", "bg-indigo-500/30", "bg-violet-500/30", "bg-fuchsia-500/20"],
     behavior: "drift",
     speedMultiplier: isFerrari || isLambo ? 2.5 : isKirby ? 0.8 : 1.5,
-  };
+  }), [selectedCharacter, particleDensity]);
 
   // SSR hydration guard — return an inert black shell until the client has mounted
   if (!isMounted) {
@@ -1060,7 +1080,8 @@ const PixelCatCompanion = forwardRef(({
                   }`}
               >
                 <img
-                  src={currentFrames[frameIndex] || currentFrames[0]}
+                  ref={spriteRef}
+                  src={currentFrames[frameIndexRef.current] || currentFrames[0]}
                   alt={`Pixel ${selectedCharacter} companion`}
                   className={`image-render-pixel transition-all duration-300
                   ${selectedCharacter === "ferrari" || selectedCharacter === "lambo" ? "object-bottom" : "object-contain"}
