@@ -1023,17 +1023,17 @@ const PixelCatCompanion = forwardRef(({
 
   // SSR hydration guard — return an inert black shell until the client has mounted
   if (!isMounted) {
-    return <div className="h-[100dvh] w-full max-w-[400px] mx-auto relative overflow-hidden bg-black" />;
+    return <div className="min-h-screen w-full max-w-md mx-auto relative overflow-hidden bg-black" />;
   }
 
   return (
-    <div ref={containerRef} className={`h-[100dvh] w-full max-w-[400px] mx-auto relative overflow-hidden font-sans selection:bg-purple-500/30 ${theme === "dark" ? "bg-black text-slate-300" : "bg-white text-slate-700"} ${isRetroMode ? "grayscale contrast-[1.15]" : ""}`}>
+    <div ref={containerRef} className={`min-h-screen w-full max-w-md mx-auto relative overflow-hidden font-sans selection:bg-purple-500/30 ${theme === "dark" ? "bg-black text-slate-300" : "bg-white text-slate-700"} ${isRetroMode ? "grayscale contrast-[1.15]" : ""}`}>
 
       {/* Particle System — client-only, gated behind isMounted */}
       <ParticleSystem config={particleConfig} isActive={!isFocusMode} tiltRef={tiltRef} />
 
       {isFocusMode ? (
-        <div className="fixed inset-0 z-[200] w-full max-w-[400px] mx-auto h-[100dvh] flex flex-col items-center justify-center bg-black overflow-hidden">
+        <div className="fixed inset-0 z-[200] w-full max-w-md mx-auto h-[100dvh] flex flex-col items-center justify-center bg-black overflow-hidden">
           {/* Top-left minimal back button */}
           <div className="absolute top-6 left-6 sm:top-10 sm:left-10 z-[210]">
             <motion.button
@@ -1072,7 +1072,7 @@ const PixelCatCompanion = forwardRef(({
           </div>
         </div>
       ) : (
-        /* Main Layout - Seamless AMOLED Cinematic Composition */
+        /* Main Layout - Seamless AMOLED Cinematic Composition with Natural Vertical Flow */
         <div
           style={{
             paddingLeft: "env(safe-area-inset-left, 0px)",
@@ -1080,12 +1080,12 @@ const PixelCatCompanion = forwardRef(({
             paddingTop: "env(safe-area-inset-top, 0px)",
             paddingBottom: "env(safe-area-inset-bottom, 0px)",
           }}
-          className="relative z-10 flex flex-row h-[100dvh] w-full min-h-0 overflow-hidden bg-black"
+          className="relative z-10 flex flex-col min-h-screen w-full bg-black p-4 sm:p-6 pb-8"
         >
-          {/* LEFT: Cinematic Centerpiece */}
-          <section className={`relative w-[60%] sm:w-[62%] md:w-[64%] h-full min-h-0 flex flex-col justify-between bg-black overflow-hidden transition-all duration-1000 ${isLightFocusMode ? 'blur-[3px] opacity-60 saturate-50' : ''}`}>
+          {/* Top Section: Character Switcher & Header */}
+          <div className="w-full flex flex-col gap-4 shrink-0 z-20">
             {/* Character Switcher */}
-            <div className="z-20 flex flex-row gap-2 pt-4 pl-4 sm:pt-6 sm:pl-6 portrait:md:pt-12 portrait:md:pl-12 lg:pt-12 lg:pl-12 w-full">
+            <div className="flex flex-row justify-center gap-2 w-full flex-wrap">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -1135,39 +1135,73 @@ const PixelCatCompanion = forwardRef(({
                 CAT
               </motion.button>
             </div>
-
-            {/* Main Character */}
-            <div className="flex-grow flex items-center justify-center min-h-0 relative w-full">
-              <motion.div
-                className={`relative z-10 cursor-default select-none drop-shadow-2xl flex min-h-0 transition-all duration-300
-                ${selectedCharacter === "ferrari" || selectedCharacter === "lambo"
-                    ? "absolute bottom-1 sm:bottom-2 w-full left-0 right-0 items-end justify-center"
-                    : "items-center justify-center"
-                  }`}
-              >
-                <img
-                  ref={spriteRef}
-                  src={currentFrames[frameIndexRef.current] || currentFrames[0]}
-                  alt={`Pixel ${selectedCharacter} companion`}
-                  className={`image-render-pixel transition-all duration-300
-                  ${selectedCharacter === "ferrari" || selectedCharacter === "lambo" ? "object-bottom" : "object-contain"}
-                  ${selectedCharacter === "kirby"
-                      ? "w-auto h-[80vh] max-h-[195px] sm:max-h-[275px] md:max-h-[390px] lg:max-h-[520px]"
-                      : selectedCharacter === "ferrari" || selectedCharacter === "lambo"
-                        ? "w-full h-auto max-h-[70vh]"
-                        : "w-auto h-[58vh] max-h-[130px] sm:max-h-[185px] md:max-h-[260px] lg:max-h-[350px]"
+            
+            {/* Header Info */}
+            <div className="flex flex-row justify-between items-center border-b border-white/5 pb-2">
+              <div className="flex flex-col">
+                <span className="text-[6px] tracking-[0.3em] text-white/20 font-mono uppercase">SYSTEM PROTOCOL</span>
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={currentInfo.label}
+                    initial={{ opacity: 0, x: 5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -5 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className={`text-[10px] tracking-widest font-mono uppercase ${currentInfo.color} leading-none mt-1`}
+                  >
+                    {currentInfo.label}
+                  </motion.span>
+                </AnimatePresence>
+              </div>
+              <div className="flex items-center gap-2">
+                {isWakeLockActive && (
+                  <motion.span
+                    initial={{ opacity: 0, y: -2 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`text-[6px] tracking-[0.2em] font-mono uppercase flex items-center gap-1.5 ${
+                      selectedCharacter === "lambo" ? "text-[#87a96b]/90" :
+                      selectedCharacter === "ferrari" ? "text-[#f3e5ab]/90" :
+                      selectedCharacter === "kirby" ? "text-[#e6e6fa]/90" :
+                      "text-cyan-400/90"
                     }`}
-                />
-              </motion.div>
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${
+                      selectedCharacter === "lambo" ? "bg-[#87a96b]" :
+                      selectedCharacter === "ferrari" ? "bg-[#f3e5ab]" :
+                      selectedCharacter === "kirby" ? "bg-[#e6e6fa]" :
+                      "bg-cyan-400"
+                    }`} />
+                    SCREEN AWAKE
+                  </motion.span>
+                )}
+                <div className={`p-1.5 rounded bg-white/5 border border-white/10 ${currentInfo.color}`}>
+                  <CurrentIcon className="w-4 h-4" />
+                </div>
+              </div>
             </div>
+          </div>
 
+          {/* Middle Section: Cat Area (Flexible) */}
+          <div className={`flex-grow flex-1 w-full flex flex-col items-center justify-center py-6 min-h-0 relative z-10 ${isLightFocusMode ? 'blur-[3px] opacity-60 saturate-50' : ''}`}>
+            <div className="flex-grow flex-1 w-full flex items-center justify-center">
+              <img
+                ref={spriteRef}
+                src={currentFrames[frameIndexRef.current] || currentFrames[0]}
+                alt={`Pixel ${selectedCharacter} companion`}
+                className={`image-render-pixel transition-all duration-300
+                ${selectedCharacter === "ferrari" || selectedCharacter === "lambo" ? "object-bottom" : "object-contain"}
+                ${selectedCharacter === "kirby"
+                    ? "w-auto h-[35vh] max-h-[220px]"
+                    : selectedCharacter === "ferrari" || selectedCharacter === "lambo"
+                      ? "w-full h-auto max-h-[30vh]"
+                      : "w-auto h-[25vh] max-h-[160px]"
+                  }`}
+              />
+            </div>
+            
             {/* Status Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col gap-1.5 w-full z-20 pb-4 pl-4 sm:pb-6 sm:pl-6 portrait:md:pb-12 portrait:md:pl-12 lg:pb-12 lg:pl-12"
-            >
-              <div className={`h-px w-16 sm:w-32 bg-gradient-to-r ${themeColors.badgeLine} to-transparent`} />
+            <motion.div className="flex flex-col items-center gap-1 mt-4">
+              <div className={`h-px w-20 bg-gradient-to-r ${themeColors.badgeLine} to-transparent`} />
               <AnimatePresence mode="wait">
                 <motion.span
                   key={currentInfo.label}
@@ -1175,25 +1209,25 @@ const PixelCatCompanion = forwardRef(({
                   animate={{ opacity: 1, filter: "blur(0px)" }}
                   exit={{ opacity: 0, filter: "blur(2px)" }}
                   transition={{ duration: 1.2, ease: "easeInOut" }}
-                  className={`text-[7px] sm:text-[9px] md:text-[11px] tracking-[0.3em] font-mono uppercase ${themeColors.textMuted}`}
+                  className={`text-[8px] sm:text-[9px] tracking-[0.3em] font-mono uppercase ${themeColors.textMuted}`}
                 >
                   {currentInfo.label}
                 </motion.span>
               </AnimatePresence>
             </motion.div>
-          </section>
+          </div>
 
-          {/* Soft gradient divider (replaces hard border) */}
-          <div className="w-px h-full shrink-0 bg-gradient-to-b from-transparent via-white/[0.04] to-transparent" />
+          {/* Divider */}
+          <div className="w-full h-px shrink-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent my-4" />
 
-          {/* RIGHT: Floating OLED Telemetry OR Light Focus */}
-          <section className="w-[40%] sm:w-[38%] md:w-[36%] h-full max-h-full relative z-[50] flex flex-col justify-between bg-black overflow-hidden min-h-0">
-
+          {/* Bottom Section: Clock & Metrics/Controls */}
+          <div className="w-full mt-auto flex-shrink-0 flex flex-col gap-4 z-10">
             {isLightFocusMode ? (
-              <div className="flex-1 flex flex-col items-center justify-center relative w-full h-full">
-                <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50">
+              /* Light Focus Clock */
+              <div className="flex flex-col items-center justify-center relative w-full py-6">
+                <div className="absolute top-0 right-0 z-50">
                   <motion.button
-                    whileHover={{ scale: 1.1, filter: "drop-shadow(0 0 8px rgba(255,255,255,0.2))" }}
+                    whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       setIsLightFocusMode(false);
@@ -1201,23 +1235,23 @@ const PixelCatCompanion = forwardRef(({
                     }}
                     className="p-2 text-white/20 hover:text-white/70 transition-colors cursor-pointer rounded-full bg-white/5 border border-white/5"
                   >
-                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-1" />
+                    <ChevronLeft className="w-4 h-4 stroke-1" />
                   </motion.button>
                 </div>
 
-                <div className="relative font-mono flex items-center justify-center w-full px-2">
+                <div className="relative font-mono flex flex-col items-center justify-center w-full px-4">
                   <motion.div
                     animate={{ opacity: glowOpacity }}
                     transition={{ duration: themeColors.clockGlowSpeed, repeat: Infinity, ease: "easeInOut" }}
                     className="absolute -inset-10 blur-[80px] rounded-full pointer-events-none"
                     style={clockGlowColorStyle}
                   />
-                  <span className={`relative z-10 flex flex-col items-center justify-center text-[16vmin] sm:text-[18vmin] md:text-[20vmin] leading-none font-digital tabular-nums transition-colors duration-1000 drop-shadow-2xl ${isNight ? 'text-white/60' : 'text-white/90'}`}>
+                  <span className={`relative z-10 flex flex-col items-center justify-center text-[12vmin] leading-none font-digital tabular-nums transition-colors duration-1000 drop-shadow-2xl ${isNight ? 'text-white/60' : 'text-white/90'}`}>
                     <span>{formattedTime.main}</span>
                     <motion.span
                       animate={{ opacity: [0.4, 1, 0.4] }}
                       transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className={`text-[5vmin] sm:text-[6vmin] md:text-[7vmin] mt-2 ${themeColors.textMuted}`}
+                      className={`text-[4vmin] mt-2 ${themeColors.textMuted}`}
                     >
                       {formattedTime.sub}
                     </motion.span>
@@ -1225,152 +1259,83 @@ const PixelCatCompanion = forwardRef(({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col justify-between p-3 sm:p-4 portrait:md:p-10 lg:p-10 h-full max-h-full min-h-0">
-                {/* TOP ROW: Header (Merged) */}
-                <div className="flex flex-row justify-end items-center border-b border-white/5 pb-1.5 portrait:md:pb-6 portrait:md:flex-col portrait:md:items-end portrait:md:space-y-4 portrait:md:border-none lg:pb-6 lg:flex-col lg:items-end lg:space-y-4 lg:border-none shrink-0">
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <div className="flex flex-col items-end">
-                      <span className="text-[5px] md:text-[8px] tracking-[0.3em] text-white/20 font-mono uppercase leading-none mb-1">SYSTEM PROTOCOL</span>
-                      <div className="flex flex-col items-end">
-                        <AnimatePresence mode="wait">
-                          <motion.span
-                            key={currentInfo.label}
-                            initial={{ opacity: 0, x: 5 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -5 }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className={`text-[10px] sm:text-xs md:text-sm tracking-widest font-mono uppercase ${currentInfo.color} leading-none mb-1 md:mb-1.5`}
-                          >
-                            {currentInfo.label}
-                          </motion.span>
-                        </AnimatePresence>
-                        <span className={`text-[6px] sm:text-[8px] md:text-[10px] tracking-[0.2em] font-mono uppercase ${themeColors.textMuted} leading-none`}>
-                          SYSTEM RUNTIME ACTIVE
-                        </span>
-                        {isWakeLockActive && (
-                          <motion.span
-                            initial={{ opacity: 0, y: -2 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={`text-[5px] sm:text-[7px] md:text-[8px] tracking-[0.2em] font-mono uppercase mt-1.5 flex items-center gap-1.5 ${selectedCharacter === "lambo" ? "text-[#87a96b]/90" :
-                              selectedCharacter === "ferrari" ? "text-[#f3e5ab]/90" :
-                                selectedCharacter === "kirby" ? "text-[#e6e6fa]/90" :
-                                  "text-cyan-400/90"
-                              }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${selectedCharacter === "lambo" ? "bg-[#87a96b]" :
-                              selectedCharacter === "ferrari" ? "bg-[#f3e5ab]" :
-                                selectedCharacter === "kirby" ? "bg-[#e6e6fa]" :
-                                  "bg-cyan-400"
-                              }`} />
-                            SCREEN AWAKE
-                          </motion.span>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`p-1 md:p-3 rounded bg-white/5 border border-white/10 ${currentInfo.color}`}>
-                      <CurrentIcon className="w-2.5 h-2.5 md:w-6 md:h-6" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* CENTER: Atmospheric Ambient Zone (Massive Clock) */}
-                <div className="flex-1 flex flex-col justify-center items-center relative min-h-0 overflow-hidden">
-                  <div className="absolute bottom-4 left-0 w-full px-6 z-10 flex flex-col items-center justify-center text-center">
-                    {/* Massive Atmospheric Clock */}
-                    <div className="relative font-mono flex flex-row items-center justify-center">
-                      <motion.div
-                        key={`${selectedCharacter}-glow`}
-                        animate={{ opacity: glowOpacity }}
-                        transition={{ duration: themeColors.clockGlowSpeed, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute -inset-10 blur-3xl rounded-full pointer-events-none"
-                        style={clockGlowColorStyle}
-                      />
-                      <span className={`relative z-10 block text-[48px] sm:text-[64px] md:text-[84px] lg:text-[110px] leading-none font-digital tabular-nums transition-colors duration-1000 drop-shadow-2xl ${isNight ? 'text-white/60' : 'text-white/90'}`}>
-                        {formattedTime.main}
-                        <motion.span
-                          animate={{ opacity: [0.4, 1, 0.4] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                          className={`text-[20px] sm:text-[28px] md:text-[36px] lg:text-[48px] ml-1 sm:ml-2 ${themeColors.textMuted}`}
-                        >
-                          {formattedTime.sub}
-                        </motion.span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* BOTTOM HUD BAR: Metrics & Controls */}
-                <div className="flex flex-row justify-between items-center pt-1.5 border-t border-white/[0.04] portrait:md:flex-col portrait:md:items-stretch portrait:md:space-y-4 portrait:md:pt-6 lg:flex-col lg:items-stretch lg:space-y-6 lg:pt-8 shrink-0">
-                  {/* Unified HUD Metrics */}
-                  <div className="flex flex-row items-center gap-2.5 md:grid md:grid-cols-2 md:gap-8">
-                    <div className="flex items-center gap-1 md:flex-col md:items-start md:gap-2">
-                      <Activity className="w-1.5 h-1.5 md:w-4 md:h-4 text-white/10" />
-                      <div className="flex items-baseline gap-0.5 md:gap-2">
-                        <motion.span
-                          ref={fpsRef}
-                          key={`${selectedCharacter}-fps`}
-                          animate={{ opacity: [0.7, 1, 0.7] }}
-                          transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                          className="text-[8px] md:text-2xl font-light text-white/60 tabular-nums"
-                        >
-                          {metricData.current.fps}
-                        </motion.span>
-                        <span className="text-[4px] md:text-[10px] text-white/10 font-mono">FPS</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 md:flex-col md:items-end md:gap-2">
-                      <div className="flex flex-col items-start md:items-end">
-                        <motion.span
-                          ref={memRef}
-                          key={`${selectedCharacter}-mem`}
-                          animate={{ opacity: [0.5, 0.9, 0.5] }}
-                          transition={{ duration: 7.2, repeat: Infinity, ease: "linear", delay: 1 }}
-                          className="text-[6px] md:text-xs font-mono text-emerald-500/40 uppercase leading-none"
-                        >
-                          M:{metricData.current.memoryUsage.toFixed(0)}
-                        </motion.span>
-                        <span ref={uptimeRef} className="text-[4px] md:text-[10px] font-mono text-white/10 italic leading-none mt-0.5 sm:block hidden">U:{Math.floor(metricData.current.uptime / 60)}m</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Micro Controls */}
-                  <div className="flex flex-row items-center gap-2 sm:gap-4 relative z-[60] pointer-events-auto">
-                    <motion.button
-                      whileHover={{ scale: 1.15, filter: "drop-shadow(0px 0px 8px currentColor)" }}
-                      whileTap={{ scale: 0.85 }}
-                      onPointerUp={toggleFullscreen}
-                      className={`p-3 sm:p-4 text-white/20 transition-colors duration-300 touch-manipulation pointer-events-auto ${themeColors.controlHover}`}
-                    >
-                      {isFullscreen ? (
-                        <Minimize className="w-3 h-3 md:w-5 md:h-5" />
-                      ) : (
-                        <Maximize className="w-3 h-3 md:w-5 md:h-5" />
-                      )}
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.15, filter: "drop-shadow(0px 0px 8px currentColor)" }}
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => setIsMuted(!isMuted)}
-                      className={`p-3 sm:p-4 transition-all duration-500 touch-manipulation pointer-events-auto ${themeColors.controlHover} ${!isMuted ? themeColors.buttonGlow : "text-white/20"
-                        }`}
-                    >
-                      {isMuted ? <VolumeX className="w-3 h-3 md:w-5 md:h-5" /> : <Volume2 className="w-3 h-3 md:w-5 md:h-5" />}
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.15, filter: "drop-shadow(0px 0px 8px currentColor)" }}
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => setShowSettings(!showSettings)}
-                      className={`p-3 sm:p-4 text-white/20 transition-colors duration-300 touch-manipulation pointer-events-auto ${themeColors.controlHover}`}
-                    >
-                      <Settings className="w-3 h-3 md:w-5 md:h-5" />
-                    </motion.button>
-                  </div>
-                </div>
+              /* Massive Atmospheric Clock (No absolute container slicing edges) */
+              <div className="w-full flex flex-col items-center justify-center relative py-4 px-4 sm:px-6">
+                <motion.div
+                  key={`${selectedCharacter}-glow`}
+                  animate={{ opacity: glowOpacity }}
+                  transition={{ duration: themeColors.clockGlowSpeed, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute -inset-10 blur-3xl rounded-full pointer-events-none"
+                  style={clockGlowColorStyle}
+                />
+                <span className={`relative z-10 block text-[48px] sm:text-[60px] md:text-[72px] leading-none font-digital tabular-nums transition-colors duration-1000 drop-shadow-2xl ${isNight ? 'text-white/60' : 'text-white/90'}`}>
+                  {formattedTime.main}
+                  <motion.span
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    className={`text-[20px] sm:text-[24px] ml-2 ${themeColors.textMuted}`}
+                  >
+                    {formattedTime.sub}
+                  </motion.span>
+                </span>
               </div>
             )}
-          </section>
+
+            {/* HUD Bar: Metrics & Controls */}
+            <div className="flex flex-row justify-between items-center pt-3 border-t border-white/[0.04] w-full">
+              {/* Unified HUD Metrics */}
+              <div className="flex flex-row items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-white/10" />
+                  <div className="flex items-baseline gap-1">
+                    <motion.span
+                      ref={fpsRef}
+                      className="text-xs font-light text-white/60 tabular-nums"
+                    >
+                      {metricData.current.fps}
+                    </motion.span>
+                    <span className="text-[8px] text-white/10 font-mono">FPS</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-start">
+                  <span ref={memRef} className="text-[8px] font-mono text-emerald-500/40 uppercase leading-none">
+                    M:{metricData.current.memoryUsage.toFixed(0)}
+                  </span>
+                  <span ref={uptimeRef} className="text-[7px] font-mono text-white/10 mt-0.5">
+                    U:{Math.floor(metricData.current.uptime / 60)}m
+                  </span>
+                </div>
+              </div>
+
+              {/* Micro Controls */}
+              <div className="flex flex-row items-center gap-1 relative z-[60]">
+                <motion.button
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.85 }}
+                  onPointerUp={toggleFullscreen}
+                  className={`p-2 text-white/20 transition-colors duration-300 ${themeColors.controlHover}`}
+                >
+                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.85 }}
+                  onClick={() => setIsMuted(!isMuted)}
+                  className={`p-2 transition-all duration-500 ${themeColors.controlHover} ${!isMuted ? themeColors.buttonGlow : "text-white/20"}`}
+                >
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.85 }}
+                  onClick={() => setShowSettings(!showSettings)}
+                  className={`p-2 text-white/20 transition-colors duration-300 ${themeColors.controlHover}`}
+                >
+                  <Settings className="w-4 h-4" />
+                </motion.button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
