@@ -441,7 +441,7 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     <canvas 
       ref={canvasRef} 
       className="absolute inset-0 pointer-events-none" 
-      style={{ zIndex: 'inherit' }}
+      style={{ zIndex: 'inherit', transform: 'translate3d(0, 0, 0)', willChange: 'transform' }}
     />
   );
 };
@@ -475,7 +475,7 @@ const PixelCatCompanion = forwardRef(({
   const [clockFormat, setClockFormat] = useState("24 HR");
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isLightFocusMode, setIsLightFocusMode] = useState(false);
-  const [metrics, setMetrics] = useState({
+  const metricData = useRef({
     fps: 60,
     latency: 0,
     memoryUsage: 0,
@@ -484,6 +484,10 @@ const PixelCatCompanion = forwardRef(({
     mouseDistance: 0,
     ambientLight: 0.5,
   });
+
+  const fpsRef = useRef(null);
+  const memRef = useRef(null);
+  const uptimeRef = useRef(null);
 
   const currentFrames = useMemo(() => {
     return CHARACTERS[selectedCharacter] || CHARACTERS.cat;
@@ -516,7 +520,7 @@ const PixelCatCompanion = forwardRef(({
 
   // Expose ref methods
   useImperativeHandle(ref, () => ({
-    getMetrics: () => metrics,
+    getMetrics: () => metricData.current,
     setState: (newState) => {
       setState(newState);
     },
@@ -671,21 +675,21 @@ const PixelCatCompanion = forwardRef(({
     if (!enablePerformanceMonitoring || !isMounted) return;
 
     performanceMonitor.current.start((fps) => {
-      setMetrics(prev => ({
-        ...prev,
+      metricData.current = {
+        ...metricData.current,
         fps,
         latency: Math.random() * 20 + 5,
         memoryUsage: Math.random() * 200 + 50,
         uptime: (Date.now() - startTime.current) / 1000,
         ambientLight: Math.random() * 0.6 + 0.2,
-      }));
+      };
     });
 
     // Simulate ambient light sensor
     const lightInterval = setInterval(() => {
       const hour = new Date().getHours();
       const ambient = hour > 20 || hour < 6 ? 0.2 : hour > 8 && hour < 18 ? 0.8 : 0.5;
-      setMetrics(prev => ({ ...prev, ambientLight: ambient }));
+      metricData.current.ambientLight = ambient;
     }, 5000);
 
     return () => {
@@ -693,6 +697,24 @@ const PixelCatCompanion = forwardRef(({
       performanceMonitor.current.stop();
     };
   }, [enablePerformanceMonitoring, isMounted]);
+
+  // Telemetry String Throttling Update Loop (runs strictly once every 500ms)
+  useEffect(() => {
+    if (!isMounted) return;
+    const telemetryInterval = setInterval(() => {
+      if (fpsRef.current) {
+        fpsRef.current.innerText = metricData.current.fps;
+      }
+      if (memRef.current) {
+        memRef.current.innerText = `M:${metricData.current.memoryUsage.toFixed(0)}`;
+      }
+      if (uptimeRef.current) {
+        uptimeRef.current.innerText = `U:${Math.floor(metricData.current.uptime / 60)}m`;
+      }
+    }, 500);
+
+    return () => clearInterval(telemetryInterval);
+  }, [isMounted]);
 
   // Ambient Status System (Phase 3B & 4A) - Rotates dynamically
   useEffect(() => {
@@ -1198,12 +1220,13 @@ const PixelCatCompanion = forwardRef(({
                       <Activity className="w-1.5 h-1.5 md:w-4 md:h-4 text-white/10" />
                       <div className="flex items-baseline gap-0.5 md:gap-2">
                         <motion.span
+                          ref={fpsRef}
                           key={`${selectedCharacter}-fps`}
                           animate={{ opacity: [0.7, 1, 0.7] }}
                           transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
                           className="text-[8px] md:text-2xl font-light text-white/60 tabular-nums"
                         >
-                          {metrics.fps}
+                          {metricData.current.fps}
                         </motion.span>
                         <span className="text-[4px] md:text-[10px] text-white/10 font-mono">FPS</span>
                       </div>
@@ -1212,14 +1235,15 @@ const PixelCatCompanion = forwardRef(({
                     <div className="flex items-center gap-1 md:flex-col md:items-end md:gap-2">
                       <div className="flex flex-col items-start md:items-end">
                         <motion.span
+                          ref={memRef}
                           key={`${selectedCharacter}-mem`}
                           animate={{ opacity: [0.5, 0.9, 0.5] }}
                           transition={{ duration: 7.2, repeat: Infinity, ease: "linear", delay: 1 }}
                           className="text-[6px] md:text-xs font-mono text-emerald-500/40 uppercase leading-none"
                         >
-                          M:{metrics.memoryUsage.toFixed(0)}
+                          M:{metricData.current.memoryUsage.toFixed(0)}
                         </motion.span>
-                        <span className="text-[4px] md:text-[10px] font-mono text-white/10 italic leading-none mt-0.5 sm:block hidden">U:{Math.floor(metrics.uptime / 60)}m</span>
+                        <span ref={uptimeRef} className="text-[4px] md:text-[10px] font-mono text-white/10 italic leading-none mt-0.5 sm:block hidden">U:{Math.floor(metricData.current.uptime / 60)}m</span>
                       </div>
                     </div>
                   </div>
