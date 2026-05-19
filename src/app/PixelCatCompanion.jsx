@@ -286,118 +286,163 @@ const SettingSelector = ({ label, options, value, onChange }) => (
 // MAIN COMPONENT: Premium Companion
 // ============================================================================
 
-const PremiumParticle = ({ color, size, initialX, initialY, duration, delay, behavior, tiltRef }) => {
-  const x = useMotionValue(initialX);
-  const y = useMotionValue(initialY);
-
-  useEffect(() => {
-    let timeoutId;
-    let intervalId;
-
-    if (behavior === "drift") {
-      const animate = () => {
-        const baseNewX = Math.random() * window.innerWidth;
-        const baseNewY = Math.random() * window.innerHeight;
-        const sensitivity = 200;
-        const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * sensitivity : 0;
-        const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * sensitivity : 0;
-        x.set(baseNewX + tiltOffsetX);
-        y.set(baseNewY + tiltOffsetY);
-        timeoutId = setTimeout(animate, duration * 1000);
-      };
-      timeoutId = setTimeout(animate, delay * 1000);
-    } else if (behavior === "orbit") {
-      let angle = Math.random() * Math.PI * 2;
-      const radius = 200;
-      const centerX = window.innerWidth / 2;
-      const centerY = window.innerHeight / 2;
-      intervalId = setInterval(() => {
-        angle += 0.02;
-        x.set(centerX + Math.cos(angle) * radius);
-        y.set(centerY + Math.sin(angle) * radius);
-      }, 50);
-    } else if (behavior === "rain") {
-      const startRain = () => {
-        let currentX = Math.random() * window.innerWidth;
-        x.set(currentX);
-        y.set(-100);
-
-        let currentY = -100;
-        const speed = (window.innerHeight + 200) / (duration * 20);
-        intervalId = setInterval(() => {
-          currentY += speed;
-          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 5 : 0;
-          currentX += tiltOffsetX;
-          y.set(currentY);
-          x.set(currentX);
-          if (currentY > window.innerHeight + 50) {
-            currentY = -100;
-            currentX = Math.random() * window.innerWidth;
-            x.set(currentX);
-          }
-        }, 50);
-      };
-
-      timeoutId = setTimeout(startRain, delay * 1000);
-    }
-
-    return () => {
-      clearTimeout(timeoutId);
-      clearInterval(intervalId);
-    };
-  }, [behavior, duration, delay, x, y, tiltRef]);
-
-  const isRain = behavior === "rain";
-
-  return (
-    <motion.div
-      style={{ x, y }}
-      initial={{ opacity: 0 }}
-      animate={isRain
-        ? { opacity: [0, 0.9, 0.9, 0] }
-        : { opacity: [0, 0.8, 0], scale: [0, 1.5, 0] }
-      }
-      transition={{ duration: duration, repeat: Infinity, delay, ease: "linear" }}
-      className="absolute pointer-events-none"
-    >
-      <div
-        className={`rounded-full ${color} ${isRain ? 'blur-[0.5px]' : 'blur-sm'}`}
-        style={isRain
-          ? { width: Math.max(2, size * 0.6), height: size * 8 }
-          : { width: size * 1.5, height: size * 1.5 }
-        }
-      />
-    </motion.div>
-  );
+const twColorToRgba = (twClass) => {
+  const map = {
+    "bg-[#dc143c]/30": "rgba(220,20,60,0.3)",
+    "bg-[#ff2e56]/30": "rgba(255,46,86,0.3)",
+    "bg-orange-500/20": "rgba(249,115,22,0.2)",
+    "bg-blue-500/30": "rgba(59,130,246,0.3)",
+    "bg-cyan-500/30": "rgba(6,182,212,0.3)",
+    "bg-indigo-500/20": "rgba(99,102,241,0.2)",
+    "bg-blue-400/30": "rgba(96,165,250,0.3)",
+    "bg-pink-500/30": "rgba(236,72,153,0.3)",
+    "bg-rose-500/30": "rgba(244,63,94,0.3)",
+    "bg-fuchsia-500/30": "rgba(217,70,239,0.3)",
+    "bg-pink-400/30": "rgba(244,114,182,0.3)",
+    "bg-purple-500/30": "rgba(168,85,247,0.3)",
+    "bg-indigo-500/30": "rgba(99,102,241,0.3)",
+    "bg-violet-500/30": "rgba(139,92,246,0.3)",
+    "bg-fuchsia-500/20": "rgba(217,70,239,0.2)"
+  };
+  return map[twClass] || "rgba(255,255,255,0.3)";
 };
 
 const ParticleSystem = ({ config, isActive, tiltRef }) => {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const canvasRef = useRef(null);
 
-  if (!isActive || !mounted) return null;
+  useEffect(() => {
+    if (!isActive) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', resize);
+    resize();
+
+    let particles = [];
+    for (let i = 0; i < config.count; i++) {
+      const twColor = config.colors[i % config.colors.length];
+      particles.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        baseX: Math.random() * window.innerWidth,
+        baseY: Math.random() * window.innerHeight,
+        size: Math.random() * 4 + 1,
+        duration: (Math.random() * 15 + 8) * (config.speedMultiplier || 1),
+        delay: Math.random() * 5,
+        color: twColorToRgba(twColor),
+        angle: Math.random() * Math.PI * 2,
+        time: 0,
+      });
+    }
+
+    let animationFrameId;
+    let lastTime = performance.now();
+
+    const render = (time) => {
+      const dt = (time - lastTime) / 1000;
+      lastTime = time;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.time += dt;
+
+        if (p.time < p.delay) continue;
+
+        const cycleTime = (p.time - p.delay) % p.duration;
+        const progress = cycleTime / p.duration;
+        
+        let opacity = 0;
+        let scale = 1;
+
+        if (config.behavior === "drift") {
+          opacity = progress < 0.5 ? progress * 1.6 : (1 - progress) * 1.6;
+          scale = progress < 0.5 ? progress * 3 : (1 - progress) * 3;
+
+          const sensitivity = 200;
+          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * sensitivity : 0;
+          const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * sensitivity : 0;
+          
+          p.x += ((p.baseX + tiltOffsetX) - p.x) * 0.01;
+          p.y += ((p.baseY + tiltOffsetY) - p.y) * 0.01;
+
+          if (Math.random() < 0.005) {
+             p.baseX = Math.random() * canvas.width;
+             p.baseY = Math.random() * canvas.height;
+          }
+        } else if (config.behavior === "orbit") {
+          opacity = progress < 0.5 ? progress * 1.6 : (1 - progress) * 1.6;
+          scale = progress < 0.5 ? progress * 3 : (1 - progress) * 3;
+
+          const radius = 200;
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          
+          p.angle += 0.02 * (dt * 60);
+          
+          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 50 : 0;
+          const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * 50 : 0;
+          
+          p.x = centerX + tiltOffsetX + Math.cos(p.angle) * radius;
+          p.y = centerY + tiltOffsetY + Math.sin(p.angle) * radius;
+        } else if (config.behavior === "rain") {
+          if (progress < 0.1) opacity = progress * 9; 
+          else if (progress < 0.9) opacity = 0.9;
+          else opacity = (1 - progress) * 9;
+
+          const speed = (canvas.height + 200) / (p.duration * 20);
+          p.y += speed * (dt * 60);
+          
+          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 5 : 0;
+          p.x += tiltOffsetX * (dt * 60);
+
+          if (p.y > canvas.height + 50) {
+            p.y = -100;
+            p.x = Math.random() * canvas.width;
+          }
+        }
+
+        ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+        ctx.fillStyle = p.color;
+
+        if (config.behavior === "rain") {
+          const w = Math.max(2, p.size * 0.6);
+          const h = p.size * 8;
+          ctx.fillRect(p.x - w/2, p.y - h/2, w, h);
+        } else {
+          const renderSize = (p.size * 1.5) * scale;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, renderSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    animationFrameId = requestAnimationFrame(render);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isActive, config, tiltRef]);
+
+  if (!isActive) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 'inherit' }}>
-      {Array.from({ length: config.count }).map((_, i) => {
-        const color = config.colors[i % config.colors.length];
-        return (
-          <PremiumParticle
-            key={i}
-            color={color}
-            size={Math.random() * 4 + 1}
-            initialX={Math.random() * window.innerWidth}
-            initialY={Math.random() * window.innerHeight}
-            duration={(Math.random() * 15 + 8) * (config.speedMultiplier || 1)}
-            delay={Math.random() * 5}
-            behavior={config.behavior}
-            tiltRef={tiltRef}
-          />
-        );
-      })}
-    </div>
+    <canvas 
+      ref={canvasRef} 
+      className="absolute inset-0 pointer-events-none" 
+      style={{ zIndex: 'inherit' }}
+    />
   );
 };
 
