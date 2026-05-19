@@ -317,12 +317,24 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    let animationFrameId;
+    let resizeTimeoutRef = null;
+
+    const handleResize = () => {
+      if (resizeTimeoutRef) clearTimeout(resizeTimeoutRef);
+      resizeTimeoutRef = setTimeout(() => {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        requestAnimationFrame(() => {
+          if (canvas) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+          }
+        });
+      }, 150);
     };
-    window.addEventListener('resize', resize);
-    resize();
+    window.addEventListener('resize', handleResize);
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
     let particles = [];
     for (let i = 0; i < config.count; i++) {
@@ -341,7 +353,6 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
       });
     }
 
-    let animationFrameId;
     let lastTime = performance.now();
 
     const render = (time) => {
@@ -439,7 +450,8 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     animationFrameId = requestAnimationFrame(render);
 
     return () => {
-      window.removeEventListener('resize', resize);
+      if (resizeTimeoutRef) clearTimeout(resizeTimeoutRef);
+      window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
   }, [isActive, config, tiltRef]);
@@ -517,6 +529,7 @@ const PixelCatCompanion = forwardRef(({
   // Gyroscope Parallax Tracking
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let timeoutId;
     const handleOrientation = (event) => {
       const beta = event.beta || 0;
       const gamma = event.gamma || 0;
@@ -524,8 +537,13 @@ const PixelCatCompanion = forwardRef(({
       tiltRef.current.x = Math.max(-1, Math.min(1, gamma / maxTilt));
       tiltRef.current.y = Math.max(-1, Math.min(1, (beta - 45) / maxTilt));
     };
-    window.addEventListener("deviceorientation", handleOrientation);
-    return () => window.removeEventListener("deviceorientation", handleOrientation);
+    timeoutId = setTimeout(() => {
+      window.addEventListener("deviceorientation", handleOrientation);
+    }, 500);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("deviceorientation", handleOrientation);
+    };
   }, []);
 
   // Expose ref methods
@@ -552,12 +570,24 @@ const PixelCatCompanion = forwardRef(({
   }, []);
 
   // Onboarding System Initialization
-  useEffect(() => {
-    setShowOnboarding(true);
+  const initNoSleep = useCallback(() => {
     if (!noSleepRef.current) {
       noSleepRef.current = new NoSleep();
+      if (process.env.NODE_ENV === 'production') {
+        try {
+          noSleepRef.current.enable().catch(() => {});
+          noSleepRef.current.disable();
+        } catch (e) {
+          // Catch swallowed promise rejections
+        }
+      }
     }
   }, []);
+
+  useEffect(() => {
+    setShowOnboarding(true);
+    initNoSleep();
+  }, [initNoSleep]);
 
   const handleEnterFullscreen = async () => {
     try {
@@ -588,16 +618,46 @@ const PixelCatCompanion = forwardRef(({
   // Sprite animation loop (Phase 4C - Advanced Idle Behavior)
   // Uses direct DOM manipulation via spriteRef to avoid triggering React re-renders
   useEffect(() => {
-    frameIndexRef.current = 0;
-    if (spriteRef.current) {
-      spriteRef.current.src = currentFrames[0] || '';
-    }
+    if (!isMounted) return;
+    let isCancelled = false;
     let timeoutId;
     let currentIdx = 0;
+    let lastFrameTime = performance.now();
     const maxFrames = currentFrames.length;
     const frames = [...currentFrames]; // snapshot to avoid stale closure
 
+    const preloadAndStart = async () => {
+      for (let src of frames) {
+        if (isCancelled) return;
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = resolve;
+          img.onerror = resolve; // Continue even if one fails
+          img.src = src;
+        });
+      }
+
+      if (!isCancelled) {
+        frameIndexRef.current = 0;
+        if (spriteRef.current) {
+          spriteRef.current.src = frames[0] || '';
+        }
+        lastFrameTime = performance.now();
+        timeoutId = setTimeout(advanceFrame, 150);
+      }
+    };
+
     const advanceFrame = () => {
+      const now = performance.now();
+      const delta = now - lastFrameTime;
+      const minDelay = 1000 / 30; // Cap at 30 FPS
+      
+      if (delta < minDelay) {
+        timeoutId = setTimeout(advanceFrame, minDelay - delta);
+        return;
+      }
+      lastFrameTime = now;
+
       const isKirby = selectedCharacter === "kirby";
       const isFerrari = selectedCharacter === "ferrari";
       const isLambo = selectedCharacter === "lambo";
@@ -606,17 +666,12 @@ const PixelCatCompanion = forwardRef(({
       let delay = isFerrari ? 70 : isLambo ? 60 : isKirby ? 170 : 240; // Base timing
 
       if (!isKirby && !isFerrari && !isLambo) {
-        // 1. Variable frame timing (controlled imperfection)
-        delay += Math.floor(Math.random() * 40) - 20; // +/- 20ms micro-shifts
-
-        // 2. Rare alternate cadence and micro-pauses
+        delay += Math.floor(Math.random() * 40) - 20; 
         const rand = Math.random();
-
-        // Cat: introspective, asymmetrical (contemplative pauses)
         if (rand > 0.96) {
-          delay += 400; // Deep contemplative pause
+          delay += 400; 
         } else if (rand > 0.92) {
-          nextFrame = currentIdx; // Rare alternate cadence (stutter-step hold)
+          nextFrame = currentIdx; 
           delay = 180;
         }
       }
@@ -625,18 +680,20 @@ const PixelCatCompanion = forwardRef(({
       currentIdx = nextFrame;
       frameIndexRef.current = nextFrame;
 
-      // Direct DOM update — bypasses React reconciliation entirely
       if (spriteRef.current) {
         spriteRef.current.src = frames[nextFrame] || frames[0];
       }
 
-      timeoutId = setTimeout(advanceFrame, delay);
+      timeoutId = setTimeout(advanceFrame, Math.max(minDelay, delay));
     };
 
-    timeoutId = setTimeout(advanceFrame, 150);
+    preloadAndStart();
 
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharacter, currentFrames.length]);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [selectedCharacter, currentFrames, isMounted]);
 
   // Time display
   useEffect(() => {
@@ -757,14 +814,18 @@ const PixelCatCompanion = forwardRef(({
 
   // Audio reactivity initialization
   useEffect(() => {
-    if (enableAudioReactivity && !isMuted) {
-      if (!audioEngine.current) audioEngine.current = new AudioReactivityEngine();
-      audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
+    let timeoutId;
+    if (enableAudioReactivity && !isMuted && isMounted) {
+      timeoutId = setTimeout(() => {
+        if (!audioEngine.current) audioEngine.current = new AudioReactivityEngine();
+        audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
+      }, 500);
     }
     return () => {
+      clearTimeout(timeoutId);
       if (audioEngine.current) audioEngine.current.stop();
     };
-  }, [enableAudioReactivity, isMuted]);
+  }, [enableAudioReactivity, isMuted, isMounted]);
 
   // Cinematic Ambient Music System — deferred behind isMounted to avoid SSR Audio constructor crash
   useEffect(() => {
