@@ -153,10 +153,15 @@ class PerformanceMonitor {
   lastTime = performance.now();
   fps = 60;
   frameCallback = null;
+  rafId = null;
+  active = false;
 
   start(callback) {
+    if (this.active) return; // Prevent duplicate loops
+    this.active = true;
     this.frameCallback = callback;
     const measure = () => {
+      if (!this.active) return;
       this.frames++;
       const now = performance.now();
       if (now - this.lastTime >= 1000) {
@@ -165,9 +170,17 @@ class PerformanceMonitor {
         this.frames = 0;
         this.lastTime = now;
       }
-      requestAnimationFrame(measure);
+      this.rafId = requestAnimationFrame(measure);
     };
-    requestAnimationFrame(measure);
+    this.rafId = requestAnimationFrame(measure);
+  }
+
+  stop() {
+    this.active = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
   }
 
   getCurrentFPS() {
@@ -400,6 +413,7 @@ const PixelCatCompanion = forwardRef(({
   particleDensity = "medium",
 }, ref) => {
   // Core state
+  const [isMounted, setIsMounted] = useState(false);
   const [state, setState] = useState("idle");
   const [ambientIndex, setAmbientIndex] = useState(0);
   const [selectedCharacter, setSelectedCharacter] = useState("lambo");
@@ -471,6 +485,11 @@ const PixelCatCompanion = forwardRef(({
       }
     },
   }));
+
+  // Mount gate — trips once on client, unblocks all browser-only APIs
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Onboarding System Initialization
   useEffect(() => {
@@ -604,7 +623,7 @@ const PixelCatCompanion = forwardRef(({
 
   // Performance monitoring
   useEffect(() => {
-    if (!enablePerformanceMonitoring) return;
+    if (!enablePerformanceMonitoring || !isMounted) return;
 
     performanceMonitor.current.start((fps) => {
       setMetrics(prev => ({
@@ -624,8 +643,11 @@ const PixelCatCompanion = forwardRef(({
       setMetrics(prev => ({ ...prev, ambientLight: ambient }));
     }, 5000);
 
-    return () => clearInterval(lightInterval);
-  }, [enablePerformanceMonitoring]);
+    return () => {
+      clearInterval(lightInterval);
+      performanceMonitor.current.stop();
+    };
+  }, [enablePerformanceMonitoring, isMounted]);
 
   // Ambient Status System (Phase 3B & 4A) - Rotates dynamically
   useEffect(() => {
@@ -654,8 +676,10 @@ const PixelCatCompanion = forwardRef(({
     };
   }, [enableAudioReactivity, isMuted]);
 
-  // Cinematic Ambient Music System
+  // Cinematic Ambient Music System — deferred behind isMounted to avoid SSR Audio constructor crash
   useEffect(() => {
+    if (!isMounted) return;
+
     let active = true;
     if (!ambientAudio.current) {
       ambientAudio.current = new Audio("/audio/ambient.mp3");
@@ -699,7 +723,7 @@ const PixelCatCompanion = forwardRef(({
       active = false;
       clearInterval(fadeInterval);
     };
-  }, [isMuted]);
+  }, [isMuted, isMounted]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -842,10 +866,17 @@ const PixelCatCompanion = forwardRef(({
     colors: themeColors.particleColors,
     behavior: "drift",
     speedMultiplier: isFerrari || isLambo ? 2.5 : isKirby ? 0.8 : 1.5,
-  }; return (
+  };
+
+  // SSR hydration guard — return an inert black shell until the client has mounted
+  if (!isMounted) {
+    return <div className="h-[100dvh] w-screen bg-black" />;
+  }
+
+  return (
     <div ref={containerRef} className={`h-[100dvh] w-screen overflow-hidden font-sans selection:bg-purple-500/30 ${theme === "dark" ? "bg-black text-slate-300" : "bg-white text-slate-700"} ${isRetroMode ? "grayscale contrast-[1.15]" : ""}`}>
 
-      {/* Particle System */}
+      {/* Particle System — client-only, gated behind isMounted */}
       <ParticleSystem config={particleConfig} isActive={!isFocusMode} tiltRef={tiltRef} />
 
       {isFocusMode ? (
