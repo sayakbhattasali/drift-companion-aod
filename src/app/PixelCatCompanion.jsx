@@ -1023,17 +1023,17 @@ const PixelCatCompanion = forwardRef(({
 
   // SSR hydration guard — return an inert black shell until the client has mounted
   if (!isMounted) {
-    return <div className="h-[100dvh] w-screen bg-black" />;
+    return <div className="h-[100dvh] w-full max-w-[400px] mx-auto relative overflow-hidden bg-black" />;
   }
 
   return (
-    <div ref={containerRef} className={`h-[100dvh] w-screen overflow-hidden font-sans selection:bg-purple-500/30 ${theme === "dark" ? "bg-black text-slate-300" : "bg-white text-slate-700"} ${isRetroMode ? "grayscale contrast-[1.15]" : ""}`}>
+    <div ref={containerRef} className={`h-[100dvh] w-full max-w-[400px] mx-auto relative overflow-hidden font-sans selection:bg-purple-500/30 ${theme === "dark" ? "bg-black text-slate-300" : "bg-white text-slate-700"} ${isRetroMode ? "grayscale contrast-[1.15]" : ""}`}>
 
       {/* Particle System — client-only, gated behind isMounted */}
       <ParticleSystem config={particleConfig} isActive={!isFocusMode} tiltRef={tiltRef} />
 
       {isFocusMode ? (
-        <div className="fixed inset-0 z-[200] w-screen h-[100dvh] flex flex-col items-center justify-center bg-black">
+        <div className="fixed inset-0 z-[200] w-full max-w-[400px] mx-auto h-[100dvh] flex flex-col items-center justify-center bg-black overflow-hidden">
           {/* Top-left minimal back button */}
           <div className="absolute top-6 left-6 sm:top-10 sm:left-10 z-[210]">
             <motion.button
@@ -1275,7 +1275,7 @@ const PixelCatCompanion = forwardRef(({
 
                 {/* CENTER: Atmospheric Ambient Zone (Massive Clock) */}
                 <div className="flex-1 flex flex-col justify-center items-center relative min-h-0 overflow-hidden">
-                  <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                  <div className="absolute bottom-4 left-0 w-full px-6 z-10 flex flex-col items-center justify-center text-center">
                     {/* Massive Atmospheric Clock */}
                     <div className="relative font-mono flex flex-row items-center justify-center">
                       <motion.div
