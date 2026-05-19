@@ -320,6 +320,14 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     let animationFrameId;
     let resizeTimeoutRef = null;
 
+    // Zero-allocation variables for ParticleSystem
+    let dt = 0, opacity = 0, scale = 1;
+    let cycleTime = 0, progress = 0;
+    let sensitivity = 200, tiltOffsetX = 0, tiltOffsetY = 0;
+    let radius = 200, centerX = 0, centerY = 0;
+    let speed = 0, w = 0, h = 0, renderSize = 0;
+    let i = 0, p = null;
+
     const handleResize = () => {
       if (resizeTimeoutRef) clearTimeout(resizeTimeoutRef);
       resizeTimeoutRef = setTimeout(() => {
@@ -356,13 +364,13 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     let lastTime = performance.now();
 
     const render = (time) => {
-      const dt = (time - lastTime) / 1000;
+      dt = (time - lastTime) / 1000;
       lastTime = time;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
+      for (i = 0; i < particles.length; i++) {
+        p = particles[i];
 
         // --- ARITHMETIC SAFETY GUARD ---
         // If particle coordinates are NaN or undefined, reset to a safe random position.
@@ -376,19 +384,19 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
 
         if (p.time < p.delay) continue;
 
-        const cycleTime = (p.time - p.delay) % p.duration;
-        const progress = cycleTime / p.duration;
+        cycleTime = (p.time - p.delay) % p.duration;
+        progress = cycleTime / p.duration;
 
-        let opacity = 0;
-        let scale = 1;
+        opacity = 0;
+        scale = 1;
 
         if (config.behavior === "drift") {
           opacity = progress < 0.5 ? progress * 1.6 : (1 - progress) * 1.6;
           scale = progress < 0.5 ? progress * 3 : (1 - progress) * 3;
 
-          const sensitivity = 200;
-          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * sensitivity : 0;
-          const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * sensitivity : 0;
+          sensitivity = 200;
+          tiltOffsetX = tiltRef?.current ? tiltRef.current.x * sensitivity : 0;
+          tiltOffsetY = tiltRef?.current ? tiltRef.current.y * sensitivity : 0;
 
           p.x += ((p.baseX + tiltOffsetX) - p.x) * 0.01;
           p.y += ((p.baseY + tiltOffsetY) - p.y) * 0.01;
@@ -401,14 +409,14 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
           opacity = progress < 0.5 ? progress * 1.6 : (1 - progress) * 1.6;
           scale = progress < 0.5 ? progress * 3 : (1 - progress) * 3;
 
-          const radius = 200;
-          const centerX = canvas.width / 2;
-          const centerY = canvas.height / 2;
+          radius = 200;
+          centerX = canvas.width / 2;
+          centerY = canvas.height / 2;
 
           p.angle += 0.02 * (dt * 60);
 
-          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 50 : 0;
-          const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * 50 : 0;
+          tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 50 : 0;
+          tiltOffsetY = tiltRef?.current ? tiltRef.current.y * 50 : 0;
 
           p.x = centerX + tiltOffsetX + Math.cos(p.angle) * radius;
           p.y = centerY + tiltOffsetY + Math.sin(p.angle) * radius;
@@ -417,10 +425,10 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
           else if (progress < 0.9) opacity = 0.9;
           else opacity = (1 - progress) * 9;
 
-          const speed = (canvas.height + 200) / (p.duration * 20);
+          speed = (canvas.height + 200) / (p.duration * 20);
           p.y += speed * (dt * 60);
 
-          const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 5 : 0;
+          tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 5 : 0;
           p.x += tiltOffsetX * (dt * 60);
 
           if (p.y > canvas.height + 50) {
@@ -433,11 +441,11 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
         ctx.fillStyle = p.color;
 
         if (config.behavior === "rain") {
-          const w = Math.max(2, p.size * 0.6);
-          const h = p.size * 8;
+          w = Math.max(2, p.size * 0.6);
+          h = p.size * 8;
           ctx.fillRect(p.x - w / 2, p.y - h / 2, w, h);
         } else {
-          const renderSize = (p.size * 1.5) * scale;
+          renderSize = (p.size * 1.5) * scale;
           ctx.beginPath();
           ctx.arc(p.x, p.y, renderSize / 2, 0, Math.PI * 2);
           ctx.fill();
@@ -620,19 +628,29 @@ const PixelCatCompanion = forwardRef(({
   useEffect(() => {
     if (!isMounted) return;
     let isCancelled = false;
-    let timeoutId;
+    let animationFrameId;
     let currentIdx = 0;
     let lastFrameTime = performance.now();
     const maxFrames = currentFrames.length;
     const frames = [...currentFrames]; // snapshot to avoid stale closure
+    
+    // Zero-allocation variables for advanceFrame
+    let now = 0, delta = 0;
+    let isKirby = false, isFerrari = false, isLambo = false;
+    let nextFrame = 0, currentDelay = 150, rand = 0;
 
     const preloadAndStart = async () => {
       for (let src of frames) {
         if (isCancelled) return;
         await new Promise((resolve) => {
           const img = new Image();
-          img.onload = resolve;
-          img.onerror = resolve; // Continue even if one fails
+          const cleanup = () => {
+            img.onload = null;
+            img.onerror = null;
+            resolve();
+          };
+          img.onload = cleanup;
+          img.onerror = cleanup;
           img.src = src;
         });
       }
@@ -643,55 +661,59 @@ const PixelCatCompanion = forwardRef(({
           spriteRef.current.src = frames[0] || '';
         }
         lastFrameTime = performance.now();
-        timeoutId = setTimeout(advanceFrame, 150);
+        
+        isKirby = selectedCharacter === "kirby";
+        isFerrari = selectedCharacter === "ferrari";
+        isLambo = selectedCharacter === "lambo";
+        currentDelay = isFerrari ? 70 : isLambo ? 60 : isKirby ? 170 : 240;
+        
+        animationFrameId = requestAnimationFrame(advanceFrame);
       }
     };
 
-    const advanceFrame = () => {
-      const now = performance.now();
-      const delta = now - lastFrameTime;
-      const minDelay = 1000 / 30; // Cap at 30 FPS
+    const advanceFrame = (time) => {
+      if (isCancelled) return;
+      now = time || performance.now();
+      delta = now - lastFrameTime;
       
-      if (delta < minDelay) {
-        timeoutId = setTimeout(advanceFrame, minDelay - delta);
-        return;
-      }
-      lastFrameTime = now;
+      if (delta >= currentDelay) {
+        lastFrameTime = now;
+        
+        isKirby = selectedCharacter === "kirby";
+        isFerrari = selectedCharacter === "ferrari";
+        isLambo = selectedCharacter === "lambo";
 
-      const isKirby = selectedCharacter === "kirby";
-      const isFerrari = selectedCharacter === "ferrari";
-      const isLambo = selectedCharacter === "lambo";
+        nextFrame = currentIdx + 1;
+        currentDelay = isFerrari ? 70 : isLambo ? 60 : isKirby ? 170 : 240; // Base timing
 
-      let nextFrame = currentIdx + 1;
-      let delay = isFerrari ? 70 : isLambo ? 60 : isKirby ? 170 : 240; // Base timing
+        if (!isKirby && !isFerrari && !isLambo) {
+          currentDelay += Math.floor(Math.random() * 40) - 20; 
+          rand = Math.random();
+          if (rand > 0.96) {
+            currentDelay += 400; 
+          } else if (rand > 0.92) {
+            nextFrame = currentIdx; 
+            currentDelay = 180;
+          }
+        }
 
-      if (!isKirby && !isFerrari && !isLambo) {
-        delay += Math.floor(Math.random() * 40) - 20; 
-        const rand = Math.random();
-        if (rand > 0.96) {
-          delay += 400; 
-        } else if (rand > 0.92) {
-          nextFrame = currentIdx; 
-          delay = 180;
+        nextFrame = nextFrame % maxFrames;
+        currentIdx = nextFrame;
+        frameIndexRef.current = nextFrame;
+
+        if (spriteRef.current) {
+          spriteRef.current.src = frames[nextFrame] || frames[0];
         }
       }
 
-      nextFrame = nextFrame % maxFrames;
-      currentIdx = nextFrame;
-      frameIndexRef.current = nextFrame;
-
-      if (spriteRef.current) {
-        spriteRef.current.src = frames[nextFrame] || frames[0];
-      }
-
-      timeoutId = setTimeout(advanceFrame, Math.max(minDelay, delay));
+      animationFrameId = requestAnimationFrame(advanceFrame);
     };
 
     preloadAndStart();
 
     return () => {
       isCancelled = true;
-      clearTimeout(timeoutId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [selectedCharacter, currentFrames, isMounted]);
 
