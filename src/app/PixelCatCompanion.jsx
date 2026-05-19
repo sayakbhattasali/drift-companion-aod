@@ -316,7 +316,7 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
+
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -352,13 +352,22 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
+
+        // --- ARITHMETIC SAFETY GUARD ---
+        // If particle coordinates are NaN or undefined, reset to a safe random position.
+        if (isNaN(p.x) || isNaN(p.y) || p.x === undefined || p.y === undefined) {
+          p.x = Math.random() * window.innerWidth;
+          p.y = Math.random() * window.innerHeight;
+        }
+        // --- END ARITHMETIC SAFETY GUARD ---
+
         p.time += dt;
 
         if (p.time < p.delay) continue;
 
         const cycleTime = (p.time - p.delay) % p.duration;
         const progress = cycleTime / p.duration;
-        
+
         let opacity = 0;
         let scale = 1;
 
@@ -369,13 +378,13 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
           const sensitivity = 200;
           const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * sensitivity : 0;
           const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * sensitivity : 0;
-          
+
           p.x += ((p.baseX + tiltOffsetX) - p.x) * 0.01;
           p.y += ((p.baseY + tiltOffsetY) - p.y) * 0.01;
 
           if (Math.random() < 0.005) {
-             p.baseX = Math.random() * canvas.width;
-             p.baseY = Math.random() * canvas.height;
+            p.baseX = Math.random() * canvas.width;
+            p.baseY = Math.random() * canvas.height;
           }
         } else if (config.behavior === "orbit") {
           opacity = progress < 0.5 ? progress * 1.6 : (1 - progress) * 1.6;
@@ -384,22 +393,22 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
           const radius = 200;
           const centerX = canvas.width / 2;
           const centerY = canvas.height / 2;
-          
+
           p.angle += 0.02 * (dt * 60);
-          
+
           const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 50 : 0;
           const tiltOffsetY = tiltRef?.current ? tiltRef.current.y * 50 : 0;
-          
+
           p.x = centerX + tiltOffsetX + Math.cos(p.angle) * radius;
           p.y = centerY + tiltOffsetY + Math.sin(p.angle) * radius;
         } else if (config.behavior === "rain") {
-          if (progress < 0.1) opacity = progress * 9; 
+          if (progress < 0.1) opacity = progress * 9;
           else if (progress < 0.9) opacity = 0.9;
           else opacity = (1 - progress) * 9;
 
           const speed = (canvas.height + 200) / (p.duration * 20);
           p.y += speed * (dt * 60);
-          
+
           const tiltOffsetX = tiltRef?.current ? tiltRef.current.x * 5 : 0;
           p.x += tiltOffsetX * (dt * 60);
 
@@ -415,7 +424,7 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
         if (config.behavior === "rain") {
           const w = Math.max(2, p.size * 0.6);
           const h = p.size * 8;
-          ctx.fillRect(p.x - w/2, p.y - h/2, w, h);
+          ctx.fillRect(p.x - w / 2, p.y - h / 2, w, h);
         } else {
           const renderSize = (p.size * 1.5) * scale;
           ctx.beginPath();
@@ -438,9 +447,9 @@ const ParticleSystem = ({ config, isActive, tiltRef }) => {
   if (!isActive) return null;
 
   return (
-    <canvas 
-      ref={canvasRef} 
-      className="absolute inset-0 pointer-events-none" 
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none"
       style={{ zIndex: 'inherit', transform: 'translate3d(0, 0, 0)', willChange: 'transform' }}
     />
   );
@@ -528,7 +537,7 @@ const PixelCatCompanion = forwardRef(({
     toggleAudioReactivity: () => {
       if (isMuted) {
         if (!audioEngine.current) audioEngine.current = new AudioReactivityEngine();
-      audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
+        audioEngine.current.initialize((vol) => { ambientVolume.current = vol; });
         setIsMuted(false);
       } else {
         if (audioEngine.current) audioEngine.current.stop();
@@ -557,7 +566,7 @@ const PixelCatCompanion = forwardRef(({
       } else if (document.documentElement.webkitRequestFullscreen) {
         await document.documentElement.webkitRequestFullscreen();
       }
-      
+
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
           await DeviceOrientationEvent.requestPermission();
@@ -1186,15 +1195,15 @@ const PixelCatCompanion = forwardRef(({
                             initial={{ opacity: 0, y: -2 }}
                             animate={{ opacity: 1, y: 0 }}
                             className={`text-[5px] sm:text-[7px] md:text-[8px] tracking-[0.2em] font-mono uppercase mt-1.5 flex items-center gap-1.5 ${selectedCharacter === "lambo" ? "text-[#87a96b]/90" :
-                                selectedCharacter === "ferrari" ? "text-[#f3e5ab]/90" :
-                                  selectedCharacter === "kirby" ? "text-[#e6e6fa]/90" :
-                                    "text-cyan-400/90"
+                              selectedCharacter === "ferrari" ? "text-[#f3e5ab]/90" :
+                                selectedCharacter === "kirby" ? "text-[#e6e6fa]/90" :
+                                  "text-cyan-400/90"
                               }`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${selectedCharacter === "lambo" ? "bg-[#87a96b]" :
-                                selectedCharacter === "ferrari" ? "bg-[#f3e5ab]" :
-                                  selectedCharacter === "kirby" ? "bg-[#e6e6fa]" :
-                                    "bg-cyan-400"
+                              selectedCharacter === "ferrari" ? "bg-[#f3e5ab]" :
+                                selectedCharacter === "kirby" ? "bg-[#e6e6fa]" :
+                                  "bg-cyan-400"
                               }`} />
                             SCREEN AWAKE
                           </motion.span>
